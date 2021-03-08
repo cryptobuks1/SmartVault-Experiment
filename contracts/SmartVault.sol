@@ -113,6 +113,7 @@ contract SmartVault {
 
   address public manager;
   mapping(address => mapping(string => uint)) public balances;
+
   mapping(string => address) public tokenAddresses;
   uint public gasRebate = 0;
   bool lock = false;
@@ -143,6 +144,7 @@ contract SmartVault {
   }
 
   // introducing add/subtractBalance to reduce stack depth in func calls
+  // TODO: is my understanding correct?, or is this stupid?
   function addBalance(
     address walletOwner,
     string memory token,
@@ -204,19 +206,12 @@ contract SmartVault {
     }
   }
 
-  function transfer(
-    address payable toWallet,
-    string memory tokenName,
+  function transferETH(
+    address payable fromWallet,
     uint transferAmount
   ) private restricted {
-    if (tokenAddresses[tokenName] == tokenAddresses["ETH"]) {
-      // Do directly if transfer is ETH
-      require(address(this).balance >= transferAmount, "SMARTVAULT_TRANSFERFUNDS_ERROR");
-      toWallet.transfer(transferAmount);
-    } else{
-      // Do ERC20 approve w/ transfer=True
-      approve(toWallet, transferAmount, tokenName, true);
-    }
+      require(address(this).balance >= transferAmount, "DEXAGG_ETHTRANSFER_ERROR");
+      fromWallet.transfer(transferAmount);
   }
 
   function updateDEXAgg(address newDexAggAddress) public restricted {
@@ -314,7 +309,6 @@ contract SmartVault {
     address payable walletOwner,
     string memory exchange,
     uint gasAmount,
-    string memory tokenA,
     string memory tokenB,
     uint amountADesired,
     uint amountBDesired,
@@ -323,14 +317,16 @@ contract SmartVault {
     uint deadline
   ) external payable noReentrancy restricted {
     // Require ETH to be tokenA if passed as argument
-    require((balances[walletOwner][tokenA] >= (amountADesired+gasAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    require((balances[walletOwner]["ETH"] >= (amountADesired+gasAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
     require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_SWAPFUNDS_ERROR");
     debitGas(walletOwner, gasAmount);
     // TODO: How to route funds to and from DEXAgg contract?
     (uint amountA, uint amountB, uint liquidity) = dexAgg.addLiquidityETH(exchange, payable(this), tokenAddresses[tokenB],
     amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
-    subtractBalance(walletOwner, tokenA, amountA);
+    subtractBalance(walletOwner, "ETH", amountA);
     subtractBalance(walletOwner, tokenB, amountB);
+    addBalance(walletOwner, string(abi.encodePacked(exchange,"-","ETH")), amountA);
+    addBalance(walletOwner, string(abi.encodePacked(exchange,"-",tokenB)), amountB);
     addBalance(walletOwner, exchange, liquidity);
   }
 
@@ -358,6 +354,8 @@ contract SmartVault {
     // Update exchange LP tokens corresponding to this account
     subtractBalance(walletOwner, tokenA, amountA);
     subtractBalance(walletOwner, tokenB, amountB);
+    addBalance(walletOwner, string(abi.encodePacked(exchange,"-",tokenA)), amountA);
+    addBalance(walletOwner, string(abi.encodePacked(exchange,"-",tokenB)), amountB);
     addBalance(walletOwner, exchange, liquidity);
   }
 
@@ -365,7 +363,6 @@ contract SmartVault {
     address walletOwner,
     string memory exchange,
     uint gasAmount,
-    string memory tokenA,
     string memory tokenB,
     uint liquidity,
     uint amountAMin,
@@ -373,14 +370,22 @@ contract SmartVault {
     uint deadline
   ) external payable noReentrancy restricted {
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
-    require((balances[walletOwner][exchange] >= (liquidity)), "SMARTVAULT_LIQUNDS_ERROR");
+    require((balances[walletOwner][exchange] >= (liquidity)), "SMARTVAULT_LIQFUNDS_ERROR");
+    string memory lptokenA = string(abi.encodePacked(exchange,"-","ETH"));
+    string memory lptokenB = string(abi.encodePacked(exchange,"-",tokenB));
+    require((balances[walletOwner][lptokenA] >= (amountAMin)), "SMARTVAULT_LIQFUNDS_ERROR");
+    require((balances[walletOwner][lptokenB] >= (amountBMin)), "SMARTVAULT_LIQFUNDS_ERROR");
+    // TODO: user specific check for liquidity being withdrawn
+    debitGas(walletOwner, gasAmount);
     // TODO: How to route funds to an from uniswap contract?
     (uint amountA, uint amountB) = dexAgg.removeLiquidityETH(exchange, payable(this), tokenAddresses[tokenB],
     liquidity, amountAMin, amountBMin, deadline);
     // Return staked funds to wallet
-    addBalance(walletOwner, tokenA, amountA);
-    addBalance(walletOwner, tokenB, amountB);
     subtractBalance(walletOwner, exchange, liquidity);
+    subtractBalance(walletOwner, lptokenA, amountA);
+    subtractBalance(walletOwner, lptokenB, amountB);
+    addBalance(walletOwner, "ETH", amountA);
+    addBalance(walletOwner, tokenB, amountB);
   }
 
   function removeLiquidity(
@@ -395,20 +400,27 @@ contract SmartVault {
     uint deadline
   ) external payable noReentrancy restricted {
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
-    require((balances[walletOwner][exchange] >= (liquidity)), "SMARTVAULT_LIQUNDS_ERROR");
+    require((balances[walletOwner][exchange] >= (liquidity)), "SMARTVAULT_LIQFUNDS_ERROR");
+    string memory lptokenA = string(abi.encodePacked(exchange,"-",tokenA));
+    string memory lptokenB = string(abi.encodePacked(exchange,"-",tokenB));
+    require((balances[walletOwner][lptokenA] >= (amountAMin)), "SMARTVAULT_LIQFUNDS_ERROR");
+    require((balances[walletOwner][lptokenB] >= (amountBMin)), "SMARTVAULT_LIQFUNDS_ERROR");
+    // TODO: user specific check for liquidity being withdrawn
+    debitGas(walletOwner, gasAmount);
       // TODO: How to route funds to an from uniswap contract?
     (uint amountA, uint amountB) = dexAgg.removeLiquidity(exchange, payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
     liquidity, amountAMin, amountBMin, deadline);
     // Return staked funds to wallet
+    subtractBalance(walletOwner, exchange, liquidity);
+    subtractBalance(walletOwner, lptokenA, amountA);
+    subtractBalance(walletOwner, lptokenB, amountB);
     addBalance(walletOwner, tokenA, amountA);
     addBalance(walletOwner, tokenB, amountB);
-    subtractBalance(walletOwner, exchange, liquidity);
   }
 
   function lendETH(
     address walletOwner,
     uint gasAmount,
-    address cvContract,
     uint tradeAmount,
     address payable _cEtherContract
   ) external payable noReentrancy restricted {

@@ -67,19 +67,12 @@ contract DEXAgg {
     }
   }
 
-  function transfer(
+  function transferETH(
     address payable fromWallet,
-    address tokenAddress,
     uint transferAmount
   ) private restricted {
-    if (tokenAddress == ETHEREUM_ADDRESS) {
-      // Do directly if transfer is ETH
       require(address(this).balance >= transferAmount, "DEXAGG_ETHTRANSFER_ERROR");
       fromWallet.transfer(transferAmount);
-    } else{
-      // Do ERC20 approve w/ transfer=True
-      approve(fromWallet, transferAmount, tokenAddress, true);
-    }
   }
 
   function getTradePath(
@@ -115,7 +108,7 @@ contract DEXAgg {
       amounts = uniswapRouter.swapExactTokensForTokens(tradeAmount, minSwapAmount, tradePath, address(this), deadline);
     }
     // return token from swapping
-    transfer(fromWallet, toToken, amounts[amounts.length - 1]);
+    approve(fromWallet, amounts[amounts.length - 1], toToken, true);
     return amounts;
   }
 
@@ -139,7 +132,7 @@ contract DEXAgg {
       amounts = uniswapRouter.swapExactTokensForETH(tradeAmount, minSwapAmount, getTradePath(fromToken, uniswapRouter.WETH()), address(this), deadline);
     }
     // return token from swapping
-    transfer(fromWallet, tokenAddresses["ETH"], amounts[amounts.length - 1]);
+    transferETH(fromWallet, amounts[amounts.length - 1]);
     return amounts;
   }
 
@@ -162,7 +155,7 @@ contract DEXAgg {
       amounts = uniswapRouter.swapExactETHForTokens{value: tradeAmount}(minSwapAmount, tradePath, address(this), deadline);
     }
     // return token from swapping
-    transfer(fromWallet, toToken, amounts[amounts.length - 1]);
+    approve(fromWallet, amounts[amounts.length - 1], toToken, true);
     return amounts;
   }
 
@@ -187,7 +180,7 @@ contract DEXAgg {
       // Add two IERC20 tokens to liquidity pool
       (amountA, amountB, liquidity) = uniswapRouter.addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this), deadline);
       // return liquidity pool tokens from staking
-      transfer(fromWallet, UNISWAP_LP_ADDRESS, liquidity);
+      approve(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
     }
     return (amountA, amountB, liquidity);
   }
@@ -210,7 +203,7 @@ contract DEXAgg {
       // Add one ETH and one IERC20 token to liquidity pool
       (amountA, amountB, liquidity) = uniswapRouter.addLiquidityETH{value: amountADesired}(tokenB, amountBDesired, amountBMin, amountAMin, address(this), deadline);
       // return liquidity pool tokens from staking
-      transfer(fromWallet, UNISWAP_LP_ADDRESS, liquidity);
+      approve(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
     }
     return (amountA, amountB, liquidity);
   }
@@ -234,8 +227,8 @@ contract DEXAgg {
       (amountA, amountB) = uniswapRouter.removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, address(this), deadline);
     }
     // return tokens from withdrawing liquidity
-    transfer(fromWallet, tokenA, amountA);
-    transfer(fromWallet, tokenB, amountB);
+    approve(fromWallet, amountA, tokenA, true);
+    approve(fromWallet, amountB, tokenB, true);
     return (amountA, amountB);
   }
 
@@ -258,8 +251,8 @@ contract DEXAgg {
       (amountA, amountB) = uniswapRouter.removeLiquidityETH(tokenB, liquidity, amountBMin, amountAMin, address(this), deadline);
     }
     // return tokens from withdrawing liquidity
-    transfer(fromWallet, tokenAddresses["ETH"], amountA);
-    transfer(fromWallet, tokenB, amountB);
+    transferETH(fromWallet, amountA);
+    approve(fromWallet, amountB, tokenB, true);
     return (amountA, amountB);
   }
 }
