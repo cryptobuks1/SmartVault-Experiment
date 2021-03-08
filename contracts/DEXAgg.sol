@@ -13,12 +13,20 @@ contract DEXAgg {
 
   IUniswapV2Router02 public uniswapRouter;
   mapping(string => address) public tokenAddresses;
+  mapping(address => IERC20) public tokenInstances;
 
   constructor() {
     // initialize Uniswap Router to default address
     uniswapRouter = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
     // define contract manager
     manager = msg.sender;
+    // TODO: ERASE BELOW FOR MAINNET LAUNCH
+    updateTokenAddresses("ETH", address(0x0));
+    updateTokenAddresses("DAI", 0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa);
+    updateTokenAddresses("MKR", 0xAaF64BFCC32d0F15873a02163e7E500671a4ffcD);
+    // uniswap lp token
+    updateTokenAddresses("uniswap", UNISWAP_LP_ADDRESS);
+
   }
 
   receive() external payable {}
@@ -32,6 +40,13 @@ contract DEXAgg {
 
   function getAddress() external view returns (address payable contractAddress)  {
     return payable(this);
+  }
+
+  function updateManagerAddress(
+    address newManagerAddress
+  ) external {
+    // TODO: Make restricted for mainnet
+    manager = newManagerAddress;
   }
 
   function updateUniswapRouter(
@@ -48,22 +63,31 @@ contract DEXAgg {
       UNISWAP_LP_ADDRESS = tokenAddress;
   }
 
+  function updateTokenAddresses(
+    string memory tokenName,
+    address tokenAddress
+  ) public restricted {
+    // TODO: MAKE IMMUTABLE FOR CONTRACT SECURITY
+    // TODO: WE PROBABLY ONLY NEED THIS IN SMART VAULT CONTRACT, CAN THEN PASS ADDRESSES TO OTHER CONTRACTS GIVEN THINGS ARE SECURE HERE
+    tokenAddresses[tokenName] = tokenAddress;
+    if (keccak256(abi.encodePacked(tokenName)) != keccak256(abi.encodePacked("ETH"))) {
+      tokenInstances[tokenAddress] = IERC20(tokenAddress);
+    }
+  }
+
   function approveToken(
     address transferAddress,
     uint transferAmount,
     address tokenAddress,
     bool transferFunds
   ) private restricted {
-    // initialize IERC20 token according to provided address
-    IERC20 token = IERC20(tokenAddress);
     // get ERC20 token balance on contract
-    uint tokenBalance = token.balanceOf(address(this));
-    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS IN MAINNET
-    require (transferAmount < tokenBalance, "DEXAGG_INSUFFICIENT_BALANCE");
-    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS IN MAINNET
-    require(token.approve(transferAddress, transferAmount), "DEXAGG_ERC20APPROVAL_ERROR");
+    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS HERE IN MAINNET (?)
+    require (transferAmount < tokenInstances[tokenAddress].balanceOf(address(this)), "SMARTVAULT_APPROVEFUNDS_ERROR");
+    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS HERE IN MAINNET (?)
+    require(tokenInstances[tokenAddress].approve(transferAddress, transferAmount), "SMARTVAULT_APPROVE_ERROR");
     if (transferFunds){
-      require(token.transfer(transferAddress, transferAmount), "DEXAGG_ERC20TRANSFER_ERROR");
+      require(tokenInstances[tokenAddress].transfer(transferAddress, transferAmount), "SMARTVAULT_ERC20TRANSFER_ERROR");
     }
   }
 
@@ -105,10 +129,8 @@ contract DEXAgg {
       address[] memory tradePath = getTradePath(fromToken, toToken);
       // approveToken transfer of IERC20 to uniswap router
       approveToken(address(uniswapRouter), tradeAmount, fromToken, false);
-      amounts = uniswapRouter.swapExactTokensForTokens(tradeAmount, minSwapAmount, tradePath, address(this), deadline);
+      amounts = uniswapRouter.swapExactTokensForTokens(tradeAmount, minSwapAmount, tradePath, fromWallet, deadline);
     }
-    // return token from swapping
-    approveToken(fromWallet, amounts[amounts.length - 1], toToken, true);
     return amounts;
   }
 
@@ -129,10 +151,8 @@ contract DEXAgg {
       // approveToken transfer of IERC20 to uniswap router
       approveToken(address(uniswapRouter), tradeAmount, fromToken, false);
       // Swap IERC20 for ETH token
-      amounts = uniswapRouter.swapExactTokensForETH(tradeAmount, minSwapAmount, getTradePath(fromToken, uniswapRouter.WETH()), address(this), deadline);
+      amounts = uniswapRouter.swapExactTokensForETH(tradeAmount, minSwapAmount, getTradePath(fromToken, uniswapRouter.WETH()), fromWallet, deadline);
     }
-    // return token from swapping
-    transferETH(fromWallet, amounts[amounts.length - 1]);
     return amounts;
   }
 
@@ -152,10 +172,8 @@ contract DEXAgg {
       deadline = block.timestamp + 15000;
       address[] memory tradePath = getTradePath(uniswapRouter.WETH(), toToken);
       // Approve transfer of IERC20 to uniswap router
-      amounts = uniswapRouter.swapExactETHForTokens{value: tradeAmount}(minSwapAmount, tradePath, address(this), deadline);
+      amounts = uniswapRouter.swapExactETHForTokens{value: tradeAmount}(minSwapAmount, tradePath, fromWallet, deadline);
     }
-    // return token from swapping
-    approveToken(fromWallet, amounts[amounts.length - 1], toToken, true);
     return amounts;
   }
 
@@ -170,17 +188,16 @@ contract DEXAgg {
     uint amountBMin,
     uint deadline
   ) external restricted returns (uint amountA, uint amountB, uint liquidity) {
-    // Approve transfer of tokenB to uniswap
-    approveToken(address(uniswapRouter), amountBDesired, tokenB, false);
-    //TODO: remove this for mainnet, should be replaced with frontend passed value
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
+      //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
       // Approve transfer of tokenA to uniswap when not swapping ETH
       approveToken(address(uniswapRouter), amountADesired, tokenA, false);
+      // Approve transfer of tokenB to uniswap
+      approveToken(address(uniswapRouter), amountBDesired, tokenB, false);
       // Add two IERC20 tokens to liquidity pool
-      (amountA, amountB, liquidity) = uniswapRouter.addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this), deadline);
-      // return liquidity pool tokens from staking
-      approveToken(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
+      (amountA, amountB, liquidity) = uniswapRouter.addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, fromWallet, deadline);
+      //(amountA, amountB, liquidity) = uniswapRouter.addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this), deadline);
     }
     return (amountA, amountB, liquidity);
   }
@@ -195,15 +212,13 @@ contract DEXAgg {
     uint amountBMin,
     uint deadline
   ) external payable restricted returns (uint amountA, uint amountB, uint liquidity) {
-    // Approve transfer of tokenB to uniswap
-    approveToken(address(uniswapRouter), amountBDesired, tokenB, false);
-    //TODO: remove this for mainnet, should be replaced with frontend passed value
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
+      //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
-      // Add one ETH and one IERC20 token to liquidity pool
-      (amountA, amountB, liquidity) = uniswapRouter.addLiquidityETH{value: amountADesired}(tokenB, amountBDesired, amountBMin, amountAMin, address(this), deadline);
-      // return liquidity pool tokens from staking
-      approveToken(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
+      // Approve transfer of tokenB to uniswap
+      approveToken(address(uniswapRouter), amountBDesired, tokenB, false);
+      (amountA, amountB, liquidity) = uniswapRouter.addLiquidityETH{value:amountADesired}(tokenB, amountBDesired, amountBMin, amountAMin, fromWallet, deadline);
+      //(amountA, amountB, liquidity) = uniswapRouter.addLiquidityETH{value:amountADesired}(tokenB, amountBDesired, amountBMin, amountAMin, address(this), deadline);
     }
     return (amountA, amountB, liquidity);
   }
@@ -221,14 +236,11 @@ contract DEXAgg {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
         // Approve transfer of uniswap LP token back to uniswap
-      approveToken(address(uniswapRouter), liquidity, UNISWAP_LP_ADDRESS, false);
+      approveToken(address(uniswapRouter), liquidity, tokenAddresses[exchange], false);
       //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
-      (amountA, amountB) = uniswapRouter.removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, address(this), deadline);
+      (amountA, amountB) = uniswapRouter.removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, fromWallet, deadline);
     }
-    // return tokens from withdrawing liquidity
-    approveToken(fromWallet, amountA, tokenA, true);
-    approveToken(fromWallet, amountB, tokenB, true);
     return (amountA, amountB);
   }
 
@@ -244,15 +256,12 @@ contract DEXAgg {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
         // Approve transfer of uniswap LP token back to uniswap
-      approveToken(address(uniswapRouter), liquidity, UNISWAP_LP_ADDRESS, false);
+      approveToken(address(uniswapRouter), liquidity, tokenAddresses[exchange], false);
       //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
       // Remove one ETH and one IERC20 token from liquidity pool
-      (amountA, amountB) = uniswapRouter.removeLiquidityETH(tokenB, liquidity, amountBMin, amountAMin, address(this), deadline);
+      (amountA, amountB) = uniswapRouter.removeLiquidityETH(tokenB, liquidity, amountBMin, amountAMin, fromWallet, deadline);
     }
-    // return tokens from withdrawing liquidity
-    transferETH(fromWallet, amountA);
-    approveToken(fromWallet, amountB, tokenB, true);
     return (amountA, amountB);
   }
 }
