@@ -210,7 +210,7 @@ contract SmartVault {
     address payable fromWallet,
     uint transferAmount
   ) private restricted {
-      require(address(this).balance >= transferAmount, "DEXAGG_ETHTRANSFER_ERROR");
+      require(address(this).balance >= transferAmount, "SMARTVAULT_ETHTRANSFER_ERROR");
       fromWallet.transfer(transferAmount);
   }
 
@@ -230,22 +230,28 @@ contract SmartVault {
     uint debitAmount,
     uint gasAmount
     ) public noReentrancy {
-    if (tokenAddresses[fromToken] == tokenAddresses["ETH"]) {
-      // if ETH transaction send balanceDebit directly
-      require((balances[walletOwner][fromToken] >= (debitAmount+gasAmount)), "SMARTVAULT_WITHDRAWFUNDS_ERROR");
-      (bool sent, ) = walletOwner.call{value: debitAmount}("");
-      require(sent, "SMARTVAULT_ETHSENT_ERROR");
-    }
-    else {
-      require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
-      require((balances[walletOwner][fromToken] >= (debitAmount)), "SMARTVAULT_WITHDRAWFUNDS_ERROR");
-      //TODO : implement ERC20 withdrawal
-      bool sent = true;
-      require(sent, "SMARTVAULT_ERC20SENT_ERROR");
-    }
+    require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
+    require((balances[walletOwner][fromToken] >= (debitAmount)), "SMARTVAULT_WITHDRAWFUNDS_ERROR");
     debitGas(walletOwner, gasAmount);
+    //TODO : implement ERC20 withdrawal
+    bool sent = true;
+    require(sent, "SMARTVAULT_ERC20SENT_ERROR");
     subtractBalance(walletOwner, fromToken, debitAmount);
   }
+
+  function withdrawETH(
+    address payable walletOwner,
+    uint debitAmount,
+    uint gasAmount
+    ) public noReentrancy {
+      // if ETH transaction send balanceDebit directly
+    require((balances[walletOwner]["ETH"] >= (debitAmount+gasAmount)), "SMARTVAULT_WITHDRAWFUNDS_ERROR");
+    debitGas(walletOwner, gasAmount);
+    (bool sent, ) = walletOwner.call{value: debitAmount}("");
+    require(sent, "SMARTVAULT_ETHSENT_ERROR");
+    subtractBalance(walletOwner, fromToken, debitAmount);
+  }
+
 
   function swapETHforToken(
     address walletOwner,
