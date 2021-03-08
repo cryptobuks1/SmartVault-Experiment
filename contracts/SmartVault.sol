@@ -232,7 +232,7 @@ contract SmartVault {
       // TODO: How to route funds to and from uniswap contract?
       uint[] memory swapAmounts = uniswapInterface.swapTokens(payable(this), tradeAmount, minSwapAmount,
       tokenAddresses[fromToken], tokenAddresses[toToken],  deadline);
-      balances[walletOwner][toToken] = balances[walletOwner][toToken] + swapAmounts[1];
+      addBalance(walletOwner, toToken, swapAmounts[1]);
   }
     // After successful swap we allocate new funds
   }
@@ -249,7 +249,7 @@ contract SmartVault {
     uint amountBMin,
     uint deadline
   ) external payable noReentrancy restricted { //validDoubleToken(walletOwner, tokenA, tokenB, amountADesired, amountBDesired, gasAmount) {
-    // TODO: Why does using validDoubleToken modifier cause stack depth error?
+    // TODO: Why does using validDoubleToken modifier cause stack depth error? -- it's fine, use code below
     if (tokenAddresses[tokenA] == tokenAddresses["ETH"]) {
       require((balances[walletOwner][tokenA] >= (amountADesired+gasAmount)), "SMARTVAULT_TRADEFUNDS_ERROR");
       require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_TRADEFUNDS_ERROR");
@@ -261,9 +261,6 @@ contract SmartVault {
       require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     }
     debitGas(walletOwner, gasAmount);
-    subtractBalance(walletOwner, tokenA, amountADesired);
-    subtractBalance(walletOwner, tokenB, amountBDesired);
-
     // Require ETH to be tokenA if passed as argument
     require(tokenAddresses[tokenB] != tokenAddresses["ETH"], "SMARTVAULT_TOKENORDER_ERROR");
     // TODO : Support more exchanges
