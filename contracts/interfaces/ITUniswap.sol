@@ -14,20 +14,6 @@ interface ITUniswap {
     string memory tokenName,
     address tokenAddress
   ) public;
-  function approve(
-    uint transferAmount,
-    string memory tokenName,
-    bool transferFunds
-  ) private;
-  function transfer(
-    address payable fromWallet,
-    string memory tokenName,
-    uint transferAmount
-  ) private;
-  function getTradePath(
-    string memory fromToken,
-    string memory toToken
-  ) private view returns (address[] memory);
   function swapTokens(
     address payable fromWallet,
     uint tradeAmount,
