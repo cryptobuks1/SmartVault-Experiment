@@ -4,13 +4,13 @@ interface IDEXAgg {
   function getAddress() external view returns (address payable contractAddress);
   function swapTokenForToken(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     uint tradeAmount,
     uint minSwapAmount,
     address fromToken,
     address toToken,
     uint deadline
-  ) external payable returns (uint[] memory amounts);
+  ) external returns (uint[] memory amounts);
   function swapTokenforETH(
     string memory exchange,
     address payable fromWallet,
@@ -18,10 +18,10 @@ interface IDEXAgg {
     uint minSwapAmount,
     address fromToken,
     uint deadline
-  ) external payable returns (uint[] memory amounts);
+  ) external returns (uint[] memory amounts);
   function swapETHforToken(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     uint tradeAmount,
     uint minSwapAmount,
     address toToken,
@@ -29,7 +29,7 @@ interface IDEXAgg {
   ) external payable returns (uint[] memory amounts);
   function addLiquidityTokens(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     address tokenA,
     address tokenB,
     uint amountADesired,
@@ -37,10 +37,10 @@ interface IDEXAgg {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable returns (uint amountA, uint amountB, uint liquidity);
+  ) external returns (uint amountA, uint amountB, uint liquidity);
   function addLiquidityETH(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     address tokenB,
     uint amountADesired,
     uint amountBDesired,
@@ -50,14 +50,14 @@ interface IDEXAgg {
   ) external payable returns (uint amountA, uint amountB, uint liquidity);
   function removeLiquidityTokens(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     address tokenA,
     address tokenB,
     uint liquidity,
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable returns (uint amountA, uint amountB);
+  ) external returns (uint amountA, uint amountB);
   function removeLiquidityETH(
     string memory exchange,
     address payable fromWallet,
@@ -66,5 +66,5 @@ interface IDEXAgg {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable returns (uint amountA, uint amountB);
+  ) external returns (uint amountA, uint amountB);
 }

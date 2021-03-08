@@ -43,7 +43,7 @@ interface IDEXAgg {
     address fromToken,
     address toToken,
     uint deadline
-  ) external payable returns (uint[] memory amounts);
+  ) external returns (uint[] memory amounts);
   function swapTokenforETH(
     string memory exchange,
     address payable fromWallet,
@@ -51,7 +51,7 @@ interface IDEXAgg {
     uint minSwapAmount,
     address fromToken,
     uint deadline
-  ) external payable returns (uint[] memory amounts);
+  ) external returns (uint[] memory amounts);
   function swapETHforToken(
     string memory exchange,
     address fromWallet,
@@ -70,7 +70,7 @@ interface IDEXAgg {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable returns (uint amountA, uint amountB, uint liquidity);
+  ) external returns (uint amountA, uint amountB, uint liquidity);
   function addLiquidityETH(
     string memory exchange,
     address fromWallet,
@@ -90,7 +90,7 @@ interface IDEXAgg {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable returns (uint amountA, uint amountB);
+  ) external returns (uint amountA, uint amountB);
   function removeLiquidityETH(
     string memory exchange,
     address payable fromWallet,
@@ -99,7 +99,7 @@ interface IDEXAgg {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable returns (uint amountA, uint amountB);
+  ) external returns (uint amountA, uint amountB);
 }
 
 contract TCompound {
@@ -229,7 +229,7 @@ contract SmartVault {
   }
 
   function withdrawToken(
-    address payable walletOwner,
+    address walletOwner,
     string memory fromToken,
     uint debitAmount,
     uint gasAmount
@@ -264,7 +264,7 @@ contract SmartVault {
     uint minSwapAmount,
     string memory toToken,
     uint deadline
-  ) external payable noReentrancy restricted {
+  ) external noReentrancy restricted {
     // Require wallet has sufficient ETH  to do swap call
     require((balances[walletOwner]["ETH"] >= (gasAmount+tradeAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
     // Debit gas and send ETH to be swapped to DEXAgg
@@ -286,7 +286,7 @@ contract SmartVault {
     string memory fromToken,
     string memory toToken,
     uint deadline
-  ) external payable noReentrancy restricted {
+  ) external noReentrancy restricted {
     // Require wallet has sufficient ETH and token to do swap call
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][fromToken] >= (tradeAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
@@ -333,7 +333,7 @@ contract SmartVault {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable noReentrancy restricted {
+  ) external noReentrancy restricted {
     // Require wallet has sufficient ETH and tokens to be deposited into specified lp pool
     require((balances[walletOwner]["ETH"] >= (amountADesired+gasAmount)), "SMARTVAULT_LIQFUNDS_ERROR");
     require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_LIQFUNDS_ERROR");
@@ -363,7 +363,7 @@ contract SmartVault {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable noReentrancy restricted {
+  ) external noReentrancy restricted {
     // Require wallet has sufficient ETH and tokens to be deposited into specified lp pool
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][tokenA] >= (amountADesired)), "SMARTVAULT_LIQFUNDS_ERROR");
@@ -424,7 +424,7 @@ contract SmartVault {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable noReentrancy restricted {
+  ) external noReentrancy restricted {
     // Require wallet has sufficient ETH, LP tokens, and has deposited sufficient tokens into specified lp pool
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][exchange] >= (liquidity)), "SMARTVAULT_LIQFUNDS_ERROR");

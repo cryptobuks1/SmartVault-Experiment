@@ -31,7 +31,7 @@ contract DEXAgg {
   }
 
   function getAddress() external view returns (address payable contractAddress)  {
-    return address(this);
+    return payable(this);
   }
 
   function updateUniswapRouter(
@@ -89,13 +89,13 @@ contract DEXAgg {
 
   function swapTokenForToken(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     uint tradeAmount,
     uint minSwapAmount,
     address fromToken,
     address toToken,
     uint deadline
-  ) external payable restricted  returns (uint[] memory amounts) {
+  ) external restricted returns (uint[] memory amounts) {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       //TODO: remove this for mainnet, should be replaced with frontend passed value
@@ -119,7 +119,7 @@ contract DEXAgg {
     uint minSwapAmount,
     address fromToken,
     uint deadline
-  ) external payable restricted  returns (uint[] memory amounts) {
+  ) external restricted returns (uint[] memory amounts) {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       //TODO: remove this for mainnet, should be replaced with frontend passed value
@@ -138,12 +138,12 @@ contract DEXAgg {
 
   function swapETHforToken(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     uint tradeAmount,
     uint minSwapAmount,
     address toToken,
     uint deadline
-  ) external payable restricted  returns (uint[] memory amounts) {
+  ) external payable restricted returns (uint[] memory amounts) {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       //TODO: remove this for mainnet, should be replaced with frontend passed value
@@ -161,7 +161,7 @@ contract DEXAgg {
 
   function addLiquidityTokens(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     address tokenA,
     address tokenB,
     uint amountADesired,
@@ -169,7 +169,7 @@ contract DEXAgg {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable restricted returns (uint amountA, uint amountB, uint liquidity) {
+  ) external restricted returns (uint amountA, uint amountB, uint liquidity) {
     // Approve transfer of tokenB to uniswap
     approveToken(address(uniswapRouter), amountBDesired, tokenB, false);
     //TODO: remove this for mainnet, should be replaced with frontend passed value
@@ -187,7 +187,7 @@ contract DEXAgg {
 
   function addLiquidityETH(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     address tokenB,
     uint amountADesired,
     uint amountBDesired,
@@ -210,14 +210,14 @@ contract DEXAgg {
 
   function removeLiquidityTokens(
     string memory exchange,
-    address payable fromWallet,
+    address fromWallet,
     address tokenA,
     address tokenB,
     uint liquidity,
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable restricted returns (uint amountA, uint amountB) {
+  ) external restricted returns (uint amountA, uint amountB) {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
         // Approve transfer of uniswap LP token back to uniswap
@@ -240,7 +240,7 @@ contract DEXAgg {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable restricted returns (uint amountA, uint amountB) {
+  ) external restricted returns (uint amountA, uint amountB) {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
         // Approve transfer of uniswap LP token back to uniswap
