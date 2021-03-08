@@ -9,14 +9,14 @@ interface ITUniswap {
     address payable fromWallet,
     uint tradeAmount,
     uint minSwapAmount,
-    string memory fromToken,
-    string memory toToken,
+    address fromToken,
+    address toToken,
     uint deadline
   ) external payable returns (uint[] memory amounts);
   function addLiquidity(
     address payable fromWallet,
-    string memory tokenA,
-    string memory tokenB,
+    address tokenA,
+    address tokenB,
     uint amountADesired,
     uint amountBDesired,
     uint amountAMin,
@@ -25,8 +25,8 @@ interface ITUniswap {
   ) external payable returns (uint amountA, uint amountB, uint liquidity);
   function removeLiquidity(
     address payable fromWallet,
-    string memory tokenA,
-    string memory tokenB,
+    address tokenA,
+    address tokenB,
     uint liquidity,
     uint amountAMin,
     uint amountBMin,
