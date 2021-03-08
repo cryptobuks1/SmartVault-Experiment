@@ -62,6 +62,7 @@ contract TUniswap {
   }
 
   function approve(
+    address payable transferAddress,
     uint transferAmount,
     string memory tokenName,
     bool transferFunds
@@ -73,9 +74,9 @@ contract TUniswap {
     // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS IN MAINNET
     require (transferAmount < tokenBalance, "TUNISWAP_INSUFFICIENT_BALANCE");
     // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS IN MAINNET
-    require(token.approve(address(uniswapRouter), transferAmount), "TUNISWAP_ERC20APPROVAL_ERROR");
+    require(token.approve(transferAddress, transferAmount), "TUNISWAP_ERC20APPROVAL_ERROR");
     if (transferFunds){
-      require(token.transfer(address(uniswapRouter), transferAmount), "TUNISWAP_ERC20TRANSFER_ERROR");
+      require(token.transfer(transferAddress, transferAmount), "TUNISWAP_ERC20TRANSFER_ERROR");
     }
   }
 
@@ -90,7 +91,7 @@ contract TUniswap {
       fromWallet.transfer(transferAmount);
     } else{
       // Do ERC20 approve w/ transfer=True
-      approve(transferAmount, tokenName, true);
+      approve(fromWallet, transferAmount, tokenName, true);
     }
   }
 
@@ -121,7 +122,7 @@ contract TUniswap {
     deadline = block.timestamp + 15000;
     if (tradePath[0] != tokenAddresses["ETH"]) {
       // Approve transfer of IERC20 to uniswap router
-      approve(tradeAmount, fromToken, false);
+      approve(address(uniswapRouter), tradeAmount, fromToken, false);
       if (tradePath[1] != tokenAddresses["ETH"]) {
         // Swap IERC20 for IERC20 token
         uniswapRouter.swapExactTokensForTokens(tradeAmount, minSwapAmount, tradePath, address(this), deadline);
@@ -150,12 +151,12 @@ contract TUniswap {
     uint deadline
   ) external payable restricted validTokens(tokenA, tokenB) returns (uint amountA, uint amountB, uint liquidity) {
     // Approve transfer of tokenB to uniswap
-    approve(amountBDesired, tokenB, false);
+    approve(address(uniswapRouter), amountBDesired, tokenB, false);
     //TODO: remove this for mainnet, should be replaced with frontend passed value
     deadline = block.timestamp + 15000;
     if (tokenAddresses[tokenA] != tokenAddresses["ETH"]) {
       // Approve transfer of tokenA to uniswap when not swapping ETH
-      approve(amountADesired, tokenA, false);
+      approve(address(uniswapRouter), amountADesired, tokenA, false);
       // Add two IERC20 tokens to liquidity pool
       uniswapRouter.addLiquidity(tokenAddresses[tokenA], tokenAddresses[tokenB], amountADesired, amountBDesired, amountAMin, amountBMin, address(this), deadline);
     } else  {
@@ -177,7 +178,7 @@ contract TUniswap {
     uint deadline
   ) external payable restricted validTokens(tokenA, tokenB) returns (uint amountA, uint amountB) {
     // Approve transfer of uniswap LP token back to uniswap
-    approve(liquidity, "uniswap-LP", false);
+    approve(address(uniswapRouter), liquidity, "uniswap-LP", false);
     //TODO: remove this for mainnet, should be replaced with frontend passed value
     deadline = block.timestamp + 15000;
     if (tokenAddresses[tokenA] != tokenAddresses["ETH"]) {

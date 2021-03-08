@@ -32,29 +32,14 @@ contract TCompound {
     function redeemCErc20Tokens(uint amount, bool redeemType, address _cErc20Contract) public returns (bool) {}
     function redeemCEth(uint amount, bool redeemType, address _cEtherContract) public returns (bool) {}
 }
-contract TUniswap {
+
+import "https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/IERC20.sol";
+
+interface ITUniswap {
   function getAddress() external view returns (address contractAddress);
   function updateUniswapRouter(
     address tokenAddress
   ) external;
-  function updateTokenAddresses(
-    string memory tokenName,
-    address tokenAddress
-  ) public;
-  function approve(
-    uint transferAmount,
-    string memory tokenName,
-    bool transferFunds
-  ) private;
-  function transfer(
-    address payable fromWallet,
-    string memory tokenName,
-    uint transferAmount
-  ) private;
-  function getTradePath(
-    string memory fromToken,
-    string memory toToken
-  ) private view returns (address[] memory);
   function swapTokens(
     address payable fromWallet,
     uint tradeAmount,
@@ -83,7 +68,6 @@ contract TUniswap {
     uint deadline
   ) external payable returns (uint amountA, uint amountB);
 }
-import "https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/IERC20.sol";
 
 contract SmartVault {
 
@@ -93,7 +77,7 @@ contract SmartVault {
   uint public gasRebate = 0;
   bool lock = false;
 
-  TUniswap uniswapInterface;
+  ITUniswap uniswapInterface;
   TCompound compoundInterface;
 
   constructor() {
@@ -102,29 +86,29 @@ contract SmartVault {
     updateTokenAddresses("ETH", address(0x0));
     updateTokenAddresses("DAI", 0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa);
     updateTokenAddresses("MKR", 0xAaF64BFCC32d0F15873a02163e7E500671a4ffcD);
-    updateTokenAddresses("uniswap-LP", 0xB10cf58E08b94480fCb81d341A63295eBb2062C2);
+    updateTokenAddresses("uniswap", 0xB10cf58E08b94480fCb81d341A63295eBb2062C2);
   }
 
   modifier restricted() {
-    require((msg.sender == manager), "Manager must call SmartVault.");
+    require((msg.sender == manager), "SMARTVAULT_MANAGER_ERROR");
     _;
   }
 
   modifier noReentrancy() {
-    require(!lock, "Reentrant call.");
+    require(!lock, "SMARTVAULT_REENTRANT_ERROR");
     lock = true;
     _;
     lock = false;
   }
 
   modifier validSingleToken(
-    address payable walletOwner,
+    address walletOwner,
     string memory fromToken,
     uint debitAmount,
     uint gasAmount)
   {
     // If ETH transaction, require wallet hold tradeAmount + gas
-    if (fromToken == "ETH") {
+    if (tokenAddresses[fromToken] == tokenAddresses["ETH"]) {
       require((balances[walletOwner][fromToken] >= (debitAmount+gasAmount)), "SMARTVAULT_TRADEFUNDS_ERROR");
     }
     else{
@@ -146,7 +130,7 @@ contract SmartVault {
     uint gasAmount)
     {
     // If ETH transaction, require wallet hold tradeAmount + gas
-    if (tokenA == "ETH") {
+    if (tokenAddresses[tokenA] == tokenAddresses["ETH"]) {
       require((balances[walletOwner][tokenA] >= (debitA+gasAmount)), "SMARTVAULT_TRADEFUNDS_ERROR");
       require((balances[walletOwner][tokenB] >= (debitB)), "SMARTVAULT_TRADEFUNDS_ERROR");
     }
@@ -212,7 +196,7 @@ contract SmartVault {
       fromWallet.transfer(transferAmount);
     } else{
       // Do ERC20 approve w/ transfer=True
-      approve(transferAmount, tokenName, true);
+      approve(fromWallet, transferAmount, tokenName, true);
     }
   }
 
@@ -224,7 +208,7 @@ contract SmartVault {
 
   function updateTUniswap(address newTUniswapAddress) public restricted {
     // TODO: INCLUDE TIME DELAY FOR CONTRACT SECURITY
-    uniswapInterface = TUniswap(newTUniswapAddress);
+    uniswapInterface = ITUniswap(newTUniswapAddress);
   }
 
   function updateTCompound(address newTCompoundAddress) public restricted {
@@ -232,13 +216,30 @@ contract SmartVault {
     compoundInterface = TCompound(newTCompoundAddress);
   }
 
+  // introducing add/subtractBalance to reduce stack depth in func calls
+  function addBalance(
+    address walletOwner,
+    string memory token,
+    uint amount
+  ) private restricted{
+    balances[walletOwner][token] = balances[walletOwner][token] + amount;
+  }
+
+  function subtractBalance(
+    address walletOwner,
+    string memory token,
+    uint amount
+  ) private restricted{
+    balances[walletOwner][token] = balances[walletOwner][token] - amount;
+  }
+
   function withdraw(
     address payable walletOwner,
-    string fromToken,
+    string memory fromToken,
     uint debitAmount,
     uint gasAmount
     ) public noReentrancy validSingleToken(walletOwner, fromToken, debitAmount, gasAmount) {
-    if (fromToken == "ETH") {
+    if (tokenAddresses[fromToken] == tokenAddresses["ETH"]) {
       // if ETH transaction send balanceDebit directly
       (bool sent, ) = walletOwner.call{value: debitAmount}("");
       require(sent, "Failed to send Ether");
@@ -252,7 +253,7 @@ contract SmartVault {
 
   function swap(
     address walletOwner,
-    string exchange,
+    string memory exchange,
     uint gasAmount,
     uint tradeAmount,
     uint minSwapAmount,
@@ -261,17 +262,17 @@ contract SmartVault {
     uint deadline
   ) external payable noReentrancy restricted validSingleToken(walletOwner, fromToken, tradeAmount, gasAmount) {
     // TODO : Support more exchanges
-    if (exchange == "uniswap") {
+    if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       // TODO: How to route funds to and from uniswap contract?
-      uint swapAmount = uniswapInterface.swapTokens((this).address, tradeAmount, minSwapAmount, fromToken, toToken, deadline);
-      balances[walletOwner][toToken] = balances[walletOwner][toToken] + swapAmount;
+      uint[] memory swapAmounts = uniswapInterface.swapTokens(payable(this), tradeAmount, minSwapAmount, fromToken, toToken, deadline);
+      balances[walletOwner][toToken] = balances[walletOwner][toToken] + swapAmounts[1];
   }
     // After successful swap we allocate new funds
   }
 
   function addLiquidity(
     address payable walletOwner,
-    string exchange,
+    string memory exchange,
     uint gasAmount,
     string memory tokenA,
     string memory tokenB,
@@ -280,24 +281,23 @@ contract SmartVault {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable noReentrancy restricted validDoubleToken(walletOwner, tokenA, tokenB, amountADesired, amountBDesired) {
+  ) external payable noReentrancy restricted validDoubleToken(walletOwner, tokenA, tokenB, amountADesired, amountBDesired, gasAmount) {
     // Require ETH to be tokenA if passed as argument
-    require(tokenB != "ETH", "SMARTVAULT_TOKENORDER_ERROR");
+    require(tokenAddresses[tokenB] != tokenAddresses["ETH"], "SMARTVAULT_TOKENORDER_ERROR");
     // TODO : Support more exchanges
-    if (exchange == "uniswap") {
+    if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       // TODO: How to route funds to and from uniswap contract?
-      (uint amountA, uint amountB, uint liquidity) = uniswapInterface.addLiquidity((this).address, tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
+      (uint amountA, uint amountB, uint liquidity) = uniswapInterface.addLiquidity(payable(this), tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
       // Update UNI-LP tokens corresponding to this account
-        balances[walletOwner][tokenA] = balances[walletOwner][tokenA] - amountA;
-        balances[walletOwner][tokenB] = balances[walletOwner][tokenB] - amountB;
-        // Note, lp tokens go into wallet under "exchange-LP"
-        balances[walletOwner][exchange+"-LP"] = balances[walletOwner][exchange+"-LP"] + liquidity;
+      subtractBalance(walletOwner, tokenA, amountA);
+      subtractBalance(walletOwner, tokenB, amountB);
+      addBalance(walletOwner, exchange, liquidity);
     }
   }
 
   function removeLiquidity(
-    address payable walletOwner,
-    string exchange,
+    address walletOwner,
+    string memory exchange,
     uint gasAmount,
     string memory tokenA,
     string memory tokenB,
@@ -305,23 +305,22 @@ contract SmartVault {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable noReentrancy restricted validSingleToken(walletOwner, exchange+"-LP", liquidity, gasAmount) {
+  ) external payable noReentrancy restricted validSingleToken(walletOwner, exchange, liquidity, gasAmount) {
     // Require ETH to be tokenA if passed as argument
-    require(tokenB != "ETH", "SMARTVAULT_TOKENORDER_ERROR");
+    require(tokenAddresses[tokenB] != tokenAddresses["ETH"], "SMARTVAULT_TOKENORDER_ERROR");
     // TODO : Support more exchanges
-    if (exchange == "uniswap") {
+    if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       // TODO: How to route funds to an from uniswap contract?
-      (uint amountA, uint amountB) = uniswapInterface.removeLiquidity((this).address, tokenA, tokenB, liquidity, amountAMin, amountBMin, deadline);
+      (uint amountA, uint amountB) = uniswapInterface.removeLiquidity(payable(this), tokenA, tokenB, liquidity, amountAMin, amountBMin, deadline);
       // Return staked funds to wallet
-      balances[walletOwner][tokenA] = balances[walletOwner][tokenA] + amountA;
-      balances[walletOwner][tokenB] = balances[walletOwner][tokenB] + amountB;
-      // Note, lp tokens go into wallet under "exchange-LP"
-      balances[walletOwner][exchange+"-LP"] = balances[walletOwner][exchange+"-LP"] - liquidity;
+      addBalance(walletOwner, tokenA, amountA);
+      addBalance(walletOwner, tokenB, amountB);
+      subtractBalance(walletOwner, exchange, liquidity);
     }
   }
 
   function lend(
-    address payable walletOwner,
+    address walletOwner,
     uint gasAmount,
     address cvContract,
     uint tradeAmount,
@@ -329,7 +328,7 @@ contract SmartVault {
   ) external payable noReentrancy restricted validSingleToken(walletOwner, "ETH", tradeAmount, gasAmount) {
     // TODO: remove passed contract to be hard coded in immutable way into compoound, as per uniswap implementation
     compoundInterface.supplyEthToCompound{value:tradeAmount}(_cEtherContract);
-    balances[walletOwner]["ETH"] = balances[walletOwner]["ETH"] - tradeAmount - gasAmount;
+    subtractBalance(walletOwner, "ETH", tradeAmount+gasAmount);
     // TODO : Add support for ERC20 lending, etc..
   }
 
