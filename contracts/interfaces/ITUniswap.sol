@@ -10,10 +10,6 @@ interface ITUniswap {
   function updateUniswapRouter(
     address tokenAddress
   ) external;
-  function updateTokenAddresses(
-    string memory tokenName,
-    address tokenAddress
-  ) public;
   function swapTokens(
     address payable fromWallet,
     uint tradeAmount,
