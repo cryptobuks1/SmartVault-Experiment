@@ -26,47 +26,13 @@ pragma solidity ^0.8.0;
 
 // will this flow work for aave as well?
 // Compound interface
+import "https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/IERC20.sol";
+import "https://github.com/bobnewo/ChainVault/blob/main/contracts/interfaces/ITUniswapTest2.sol";
 contract TCompound {
     function supplyEthToCompound(address payable _cEtherContract) public payable returns (bool) {}
     function supplyErc20ToCompound(address _erc20Contract, address _cErc20Contract, uint _numTokensToSupply) public returns (uint) {}
     function redeemCErc20Tokens(uint amount, bool redeemType, address _cErc20Contract) public returns (bool) {}
     function redeemCEth(uint amount, bool redeemType, address _cEtherContract) public returns (bool) {}
-}
-
-import "https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/IERC20.sol";
-
-interface ITUniswap {
-  function getAddress() external view returns (address contractAddress);
-  function updateUniswapRouter(
-    address tokenAddress
-  ) external;
-  function swapTokens(
-    address payable fromWallet,
-    uint tradeAmount,
-    uint minSwapAmount,
-    string memory fromToken,
-    string memory toToken,
-    uint deadline
-  ) external payable returns (uint[] memory amounts);
-  function addLiquidity(
-    address payable fromWallet,
-    string memory tokenA,
-    string memory tokenB,
-    uint amountADesired,
-    uint amountBDesired,
-    uint amountAMin,
-    uint amountBMin,
-    uint deadline
-  ) external payable returns (uint amountA, uint amountB, uint liquidity);
-  function removeLiquidity(
-    address payable fromWallet,
-    string memory tokenA,
-    string memory tokenB,
-    uint liquidity,
-    uint amountAMin,
-    uint amountBMin,
-    uint deadline
-  ) external payable returns (uint amountA, uint amountB);
 }
 
 contract SmartVault {
@@ -264,7 +230,8 @@ contract SmartVault {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       // TODO: How to route funds to and from uniswap contract?
-      uint[] memory swapAmounts = uniswapInterface.swapTokens(payable(this), tradeAmount, minSwapAmount, fromToken, toToken, deadline);
+      uint[] memory swapAmounts = uniswapInterface.swapTokens(payable(this), tradeAmount, minSwapAmount,
+      tokenAddresses[fromToken], tokenAddresses[toToken],  deadline);
       balances[walletOwner][toToken] = balances[walletOwner][toToken] + swapAmounts[1];
   }
     // After successful swap we allocate new funds
@@ -282,6 +249,7 @@ contract SmartVault {
     uint amountBMin,
     uint deadline
   ) external payable noReentrancy restricted { //validDoubleToken(walletOwner, tokenA, tokenB, amountADesired, amountBDesired, gasAmount) {
+    // TODO: Why does using validDoubleToken modifier cause stack depth error?
     if (tokenAddresses[tokenA] == tokenAddresses["ETH"]) {
       require((balances[walletOwner][tokenA] >= (amountADesired+gasAmount)), "SMARTVAULT_TRADEFUNDS_ERROR");
       require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_TRADEFUNDS_ERROR");
@@ -301,7 +269,8 @@ contract SmartVault {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       // TODO: How to route funds to and from uniswap contract?
-      (uint amountA, uint amountB, uint liquidity) = uniswapInterface.addLiquidity(payable(this), tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
+      (uint amountA, uint amountB, uint liquidity) = uniswapInterface.addLiquidity(payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
+      amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
       // Update UNI-LP tokens corresponding to this account
       subtractBalance(walletOwner, tokenA, amountA);
       subtractBalance(walletOwner, tokenB, amountB);
@@ -325,7 +294,8 @@ contract SmartVault {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       // TODO: How to route funds to an from uniswap contract?
-      (uint amountA, uint amountB) = uniswapInterface.removeLiquidity(payable(this), tokenA, tokenB, liquidity, amountAMin, amountBMin, deadline);
+      (uint amountA, uint amountB) = uniswapInterface.removeLiquidity(payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
+      liquidity, amountAMin, amountBMin, deadline);
       // Return staked funds to wallet
       addBalance(walletOwner, tokenA, amountA);
       addBalance(walletOwner, tokenB, amountB);
