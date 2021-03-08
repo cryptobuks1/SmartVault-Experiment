@@ -101,6 +101,23 @@ contract SmartVault {
     lock = false;
   }
 
+  // introducing add/subtractBalance to reduce stack depth in func calls
+  function addBalance(
+    address walletOwner,
+    string memory token,
+    uint amount
+  ) private restricted{
+    balances[walletOwner][token] = balances[walletOwner][token] + amount;
+  }
+
+  function subtractBalance(
+    address walletOwner,
+    string memory token,
+    uint amount
+  ) private restricted{
+    balances[walletOwner][token] = balances[walletOwner][token] - amount;
+  }
+
   modifier validSingleToken(
     address walletOwner,
     string memory fromToken,
@@ -117,7 +134,7 @@ contract SmartVault {
       require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     }
     debitGas(walletOwner, gasAmount);
-    balances[walletOwner][fromToken] = balances[walletOwner][fromToken] - debitAmount;
+    subtractBalance(walletOwner, fromToken, debitAmount);
     _;
   }
 
@@ -141,8 +158,8 @@ contract SmartVault {
       require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     }
     debitGas(walletOwner, gasAmount);
-    balances[walletOwner][tokenA] = balances[walletOwner][tokenA] - debitA;
-    balances[walletOwner][tokenB] = balances[walletOwner][tokenB] - debitB;
+    subtractBalance(walletOwner, tokenA, debitA);
+    subtractBalance(walletOwner, tokenB, debitB);
     _;
   }
 
@@ -167,7 +184,7 @@ contract SmartVault {
   }
 
   function approve(
-    address payable transferAddress,
+    address transferAddress,
     uint transferAmount,
     string memory tokenName,
     bool transferFunds
@@ -214,23 +231,6 @@ contract SmartVault {
   function updateTCompound(address newTCompoundAddress) public restricted {
     // TODO: INCLUDE TIME DELAY FOR CONTRACT SECURITY
     compoundInterface = TCompound(newTCompoundAddress);
-  }
-
-  // introducing add/subtractBalance to reduce stack depth in func calls
-  function addBalance(
-    address walletOwner,
-    string memory token,
-    uint amount
-  ) private restricted{
-    balances[walletOwner][token] = balances[walletOwner][token] + amount;
-  }
-
-  function subtractBalance(
-    address walletOwner,
-    string memory token,
-    uint amount
-  ) private restricted{
-    balances[walletOwner][token] = balances[walletOwner][token] - amount;
   }
 
   function withdraw(
@@ -281,7 +281,21 @@ contract SmartVault {
     uint amountAMin,
     uint amountBMin,
     uint deadline
-  ) external payable noReentrancy restricted validDoubleToken(walletOwner, tokenA, tokenB, amountADesired, amountBDesired, gasAmount) {
+  ) external payable noReentrancy restricted { //validDoubleToken(walletOwner, tokenA, tokenB, amountADesired, amountBDesired, gasAmount) {
+    if (tokenAddresses[tokenA] == tokenAddresses["ETH"]) {
+      require((balances[walletOwner][tokenA] >= (amountADesired+gasAmount)), "SMARTVAULT_TRADEFUNDS_ERROR");
+      require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_TRADEFUNDS_ERROR");
+    }
+    else{
+      // If ERC20 transaction, require wallet hold tradeAmount of IERC20 and gasAmount of ETH
+      require((balances[walletOwner][tokenA] >= (amountADesired)), "SMARTVAULT_TRADEFUNDS_ERROR");
+      require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_TRADEFUNDS_ERROR");
+      require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
+    }
+    debitGas(walletOwner, gasAmount);
+    subtractBalance(walletOwner, tokenA, amountADesired);
+    subtractBalance(walletOwner, tokenB, amountBDesired);
+
     // Require ETH to be tokenA if passed as argument
     require(tokenAddresses[tokenB] != tokenAddresses["ETH"], "SMARTVAULT_TOKENORDER_ERROR");
     // TODO : Support more exchanges
