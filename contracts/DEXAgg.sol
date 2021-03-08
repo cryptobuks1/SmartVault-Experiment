@@ -30,7 +30,7 @@ contract DEXAgg {
       _;
   }
 
-  function getAddress() external view returns (address contractAddress)  {
+  function getAddress() external view returns (address payable contractAddress)  {
     return address(this);
   }
 
@@ -244,7 +244,7 @@ contract DEXAgg {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
         // Approve transfer of uniswap LP token back to uniswap
-      approve(address(uniswapRouter), liquidity, UNISWAP_LP_ADDRESS, false);
+      approveToken(address(uniswapRouter), liquidity, UNISWAP_LP_ADDRESS, false);
       //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
       // Remove one ETH and one IERC20 token from liquidity pool

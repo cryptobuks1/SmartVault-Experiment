@@ -1,7 +1,7 @@
 pragma solidity ^0.8.0;
 
 interface IDEXAgg {
-  function getAddress() external view returns (address contractAddress);
+  function getAddress() external view returns (address payable contractAddress);
   function swapTokenForToken(
     string memory exchange,
     address payable fromWallet,

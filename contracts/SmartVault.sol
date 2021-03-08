@@ -34,7 +34,7 @@ import "https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/in
 pragma solidity ^0.8.0;
 
 interface IDEXAgg {
-  function getAddress() external view returns (address contractAddress);
+  function getAddress() external view returns (address payable contractAddress);
   function swapTokenForToken(
     string memory exchange,
     address fromWallet,
@@ -200,9 +200,9 @@ contract SmartVault {
     IERC20 token = IERC20(tokenAddresses[tokenName]);
     // get ERC20 token balance on contract
     uint tokenBalance = token.balanceOf(address(this));
-    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS IN MAINNET (?)
+    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS HERE IN MAINNET (?)
     require (transferAmount < tokenBalance, "SMARTVAULT_APPROVEFUNDS_ERROR");
-    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS IN MAINNET (?)
+    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS HERE IN MAINNET (?)
     require(token.approve(transferAddress, transferAmount), "SMARTVAULT_APPROVE_ERROR");
     if (transferFunds){
       require(token.transfer(transferAddress, transferAmount), "SMARTVAULT_ERC20TRANSFER_ERROR");
@@ -213,8 +213,9 @@ contract SmartVault {
     address payable fromWallet,
     uint transferAmount
   ) private restricted {
-      require(address(this).balance >= transferAmount, "SMARTVAULT_ETHTRANSFER_ERROR");
-      fromWallet.transfer(transferAmount);
+    // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS HERE IN MAINNET (?)
+    require(address(this).balance >= transferAmount, "SMARTVAULT_ETHTRANSFER_ERROR");
+    fromWallet.transfer(transferAmount);
   }
 
   function updateDEXAgg(address newDexAggAddress) public restricted {
@@ -236,7 +237,7 @@ contract SmartVault {
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][fromToken] >= (debitAmount)), "SMARTVAULT_WITHDRAWFUNDS_ERROR");
     debitGas(walletOwner, gasAmount);
-    //TODO : implement ERC20 withdrawal
+    approveToken(walletOwner, debitAmount, fromToken, true);
     bool sent = true;
     require(sent, "SMARTVAULT_ERC20SENT_ERROR");
     subtractBalance(walletOwner, fromToken, debitAmount);
@@ -264,11 +265,14 @@ contract SmartVault {
     string memory toToken,
     uint deadline
   ) external payable noReentrancy restricted {
+    // Require wallet has sufficient ETH  to do swap call
     require((balances[walletOwner]["ETH"] >= (gasAmount+tradeAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    // Debit gas and send ETH to be swapped to DEXAgg
     debitGas(walletOwner, gasAmount);
-    // TODO: How to best route funds to and from DEXAgg contract?
+    transferETH(dexAgg.getAddress(), tradeAmount);
+    // Do swap
     uint[] memory swapAmounts = dexAgg.swapETHforToken(exchange, payable(this), tradeAmount, minSwapAmount, tokenAddresses[toToken], deadline);
-    // After successful swap we allocate new funds
+    // Update wallet
     subtractBalance(walletOwner, "ETH", swapAmounts[0]);
     addBalance(walletOwner, toToken, swapAmounts[1]);
   }
@@ -283,13 +287,16 @@ contract SmartVault {
     string memory toToken,
     uint deadline
   ) external payable noReentrancy restricted {
+    // Require wallet has sufficient ETH and token to do swap call
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][fromToken] >= (tradeAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    // Debit gas and send token to be swapped to DEXAgg
     debitGas(walletOwner, gasAmount);
-    // TODO: How to route funds to DEXAgg contract?
+    approveToken(dexAgg.getAddress(), tradeAmount, fromToken, true);
+    // Do swap
     uint[] memory swapAmounts = dexAgg.swapTokenForToken(exchange, payable(this), tradeAmount, minSwapAmount,
     tokenAddresses[fromToken], tokenAddresses[toToken],  deadline);
-    // After successful swap we allocate new funds
+    // Update wallet
     subtractBalance(walletOwner, fromToken, swapAmounts[0]);
     addBalance(walletOwner, toToken, swapAmounts[1]);
   }
@@ -303,12 +310,15 @@ contract SmartVault {
     string memory fromToken,
     uint deadline
   ) external payable noReentrancy restricted {
+    // Require wallet has sufficient ETH and token to do swap call
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][fromToken] >= (tradeAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    // Debit gas and send token to be swapped to DEXAgg
     debitGas(walletOwner, gasAmount);
-    // TODO: How to best route funds to and from DEXAgg contract?
+    approveToken(dexAgg.getAddress(), tradeAmount, fromToken, true);
+    // Do swap
     uint[] memory swapAmounts = dexAgg.swapTokenforETH(exchange, payable(this), tradeAmount, minSwapAmount, tokenAddresses[fromToken], deadline);
-    // After successful swap we allocate new funds
+    // Update wallet
     subtractBalance(walletOwner, fromToken, swapAmounts[0]);
     addBalance(walletOwner, fromToken, swapAmounts[1]);
   }
@@ -324,13 +334,17 @@ contract SmartVault {
     uint amountBMin,
     uint deadline
   ) external payable noReentrancy restricted {
-    // Require ETH to be tokenA if passed as argument
+    // Require wallet has sufficient ETH and tokens to be deposited into specified lp pool
     require((balances[walletOwner]["ETH"] >= (amountADesired+gasAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
     require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    // Debit gas and send tokens to be deposited to DEXAgg
     debitGas(walletOwner, gasAmount);
-    // TODO: How to route funds to and from DEXAgg contract?
+    transferETH(dexAgg.getAddress(), amountADesired);
+    approveToken(dexAgg.getAddress(), amountBDesired, tokenB, true);
+    // Add liquidity
     (uint amountA, uint amountB, uint liquidity) = dexAgg.addLiquidityETH(exchange, payable(this), tokenAddresses[tokenB],
     amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
+    // Update wallet
     subtractBalance(walletOwner, "ETH", amountA);
     subtractBalance(walletOwner, tokenB, amountB);
     addBalance(walletOwner, string(abi.encodePacked(exchange,"-","ETH")), amountA);
@@ -350,16 +364,18 @@ contract SmartVault {
     uint amountBMin,
     uint deadline
   ) external payable noReentrancy restricted {
-    // Require ETH to be tokenA if passed as argument
+    // Require wallet has sufficient ETH and tokens to be deposited into specified lp pool
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][tokenA] >= (amountADesired)), "SMARTVAULT_SWAPFUNDS_ERROR");
     require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    // Debit gas and send tokens to be deposited to DEXAgg
     debitGas(walletOwner, gasAmount);
-    // TODO : Support more exchanges
-    // TODO: Route funds to  uniswap contract?
+    approveToken(dexAgg.getAddress(), amountADesired, tokenA, true);
+    approveToken(dexAgg.getAddress(), amountBDesired, tokenB, true);
+    // Add liquidity
     (uint amountA, uint amountB, uint liquidity) = dexAgg.addLiquidityTokens(exchange, payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
     amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
-    // Update exchange LP tokens corresponding to this account
+    // Update wallet
     subtractBalance(walletOwner, tokenA, amountA);
     subtractBalance(walletOwner, tokenB, amountB);
     addBalance(walletOwner, string(abi.encodePacked(exchange,"-",tokenA)), amountA);
@@ -377,18 +393,20 @@ contract SmartVault {
     uint amountBMin,
     uint deadline
   ) external payable noReentrancy restricted {
+    // Require wallet has sufficient ETH, LP tokens, and has deposited sufficient tokens into specified lp pool
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][exchange] >= (liquidity)), "SMARTVAULT_LIQFUNDS_ERROR");
     string memory lptokenA = string(abi.encodePacked(exchange,"-","ETH"));
     string memory lptokenB = string(abi.encodePacked(exchange,"-",tokenB));
     require((balances[walletOwner][lptokenA] >= (amountAMin)), "SMARTVAULT_LIQFUNDS_ERROR");
     require((balances[walletOwner][lptokenB] >= (amountBMin)), "SMARTVAULT_LIQFUNDS_ERROR");
-    // TODO: user specific check for liquidity being withdrawn
+    // Debit gas and send liquidity tokens to DEXAgg
     debitGas(walletOwner, gasAmount);
-    // TODO: How to route funds to an from uniswap contract?
-    (uint amountA, uint amountB) = dexAgg.removeLiquidityETH(exchange, payable(this), tokenAddresses[tokenB],
+    approveToken(dexAgg.getAddress(), liquidity, exchange, true);
+    // Remove liquidity
+   (uint amountA, uint amountB) = dexAgg.removeLiquidityETH(exchange, payable(this), tokenAddresses[tokenB],
     liquidity, amountAMin, amountBMin, deadline);
-    // Return staked funds to wallet
+    // Update wallet
     subtractBalance(walletOwner, exchange, liquidity);
     subtractBalance(walletOwner, lptokenA, amountA);
     subtractBalance(walletOwner, lptokenB, amountB);
@@ -407,18 +425,20 @@ contract SmartVault {
     uint amountBMin,
     uint deadline
   ) external payable noReentrancy restricted {
+    // Require wallet has sufficient ETH, LP tokens, and has deposited sufficient tokens into specified lp pool
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     require((balances[walletOwner][exchange] >= (liquidity)), "SMARTVAULT_LIQFUNDS_ERROR");
     string memory lptokenA = string(abi.encodePacked(exchange,"-",tokenA));
     string memory lptokenB = string(abi.encodePacked(exchange,"-",tokenB));
     require((balances[walletOwner][lptokenA] >= (amountAMin)), "SMARTVAULT_LIQFUNDS_ERROR");
     require((balances[walletOwner][lptokenB] >= (amountBMin)), "SMARTVAULT_LIQFUNDS_ERROR");
-    // TODO: user specific check for liquidity being withdrawn
+    // Debit gas and send liquidity tokens to DEXAgg
     debitGas(walletOwner, gasAmount);
-      // TODO: How to route funds to an from uniswap contract?
+    approveToken(dexAgg.getAddress(), liquidity, exchange, true);
+    // Remove liquidity
     (uint amountA, uint amountB) = dexAgg.removeLiquidityTokens(exchange, payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
     liquidity, amountAMin, amountBMin, deadline);
-    // Return staked funds to wallet
+    // Update wallet
     subtractBalance(walletOwner, exchange, liquidity);
     subtractBalance(walletOwner, lptokenA, amountA);
     subtractBalance(walletOwner, lptokenB, amountB);
