@@ -28,7 +28,7 @@ interface CEth {
 // For now, just compound
 
 // TODO: add compound address mapping
-contract Compound {
+contract TCompound {
     event CompoundLog(string, uint256);
 
     function supplyEthToCompound(address payable _cEtherContract)
