@@ -60,7 +60,7 @@ interface IDEXAgg {
     address toToken,
     uint deadline
   ) external payable returns (uint[] memory amounts);
-  function addLiquidity(
+  function addLiquidityTokens(
     string memory exchange,
     address fromWallet,
     address tokenA,
@@ -81,7 +81,7 @@ interface IDEXAgg {
     uint amountBMin,
     uint deadline
   ) external payable returns (uint amountA, uint amountB, uint liquidity);
-  function removeLiquidity(
+  function removeLiquidityTokens(
     string memory exchange,
     address fromWallet,
     address tokenA,
@@ -179,6 +179,9 @@ contract SmartVault {
   function deposit() external noReentrancy payable {
     // Add incoming funds to balance dictionary
     balances[msg.sender]["ETH"] = balances[msg.sender]["ETH"] + msg.value;
+  }
+
+  function depositToken() external noReentrancy payable {
     // TODO: include ERC20 deposit functions for MetaMask users
   }
 
@@ -187,7 +190,7 @@ contract SmartVault {
     balances[msg.sender]["ETH"] = balances[msg.sender]["ETH"] + msg.value;
   }
 
-  function approve(
+  function approveToken(
     address transferAddress,
     uint transferAmount,
     string memory tokenName,
@@ -224,7 +227,7 @@ contract SmartVault {
     compoundInterface = TCompound(newTCompoundAddress);
   }
 
-  function withdraw(
+  function withdrawToken(
     address payable walletOwner,
     string memory fromToken,
     uint debitAmount,
@@ -249,9 +252,8 @@ contract SmartVault {
     debitGas(walletOwner, gasAmount);
     (bool sent, ) = walletOwner.call{value: debitAmount}("");
     require(sent, "SMARTVAULT_ETHSENT_ERROR");
-    subtractBalance(walletOwner, fromToken, debitAmount);
+    subtractBalance(walletOwner, "ETH", debitAmount);
   }
-
 
   function swapETHforToken(
     address walletOwner,
@@ -336,7 +338,7 @@ contract SmartVault {
     addBalance(walletOwner, exchange, liquidity);
   }
 
-  function addLiquidity(
+  function addLiquidityTokens(
     address payable walletOwner,
     string memory exchange,
     uint gasAmount,
@@ -355,7 +357,7 @@ contract SmartVault {
     debitGas(walletOwner, gasAmount);
     // TODO : Support more exchanges
     // TODO: Route funds to  uniswap contract?
-    (uint amountA, uint amountB, uint liquidity) = dexAgg.addLiquidity(exchange, payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
+    (uint amountA, uint amountB, uint liquidity) = dexAgg.addLiquidityTokens(exchange, payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
     amountADesired, amountBDesired, amountAMin, amountBMin, deadline);
     // Update exchange LP tokens corresponding to this account
     subtractBalance(walletOwner, tokenA, amountA);
@@ -394,7 +396,7 @@ contract SmartVault {
     addBalance(walletOwner, tokenB, amountB);
   }
 
-  function removeLiquidity(
+  function removeLiquidityTokens(
     address walletOwner,
     string memory exchange,
     uint gasAmount,
@@ -414,7 +416,7 @@ contract SmartVault {
     // TODO: user specific check for liquidity being withdrawn
     debitGas(walletOwner, gasAmount);
       // TODO: How to route funds to an from uniswap contract?
-    (uint amountA, uint amountB) = dexAgg.removeLiquidity(exchange, payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
+    (uint amountA, uint amountB) = dexAgg.removeLiquidityTokens(exchange, payable(this), tokenAddresses[tokenA], tokenAddresses[tokenB],
     liquidity, amountAMin, amountBMin, deadline);
     // Return staked funds to wallet
     subtractBalance(walletOwner, exchange, liquidity);

@@ -48,7 +48,7 @@ contract DEXAgg {
       UNISWAP_LP_ADDRESS = tokenAddress;
   }
 
-  function approve(
+  function approveToken(
     address transferAddress,
     uint transferAmount,
     address tokenAddress,
@@ -103,12 +103,12 @@ contract DEXAgg {
       //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
       address[] memory tradePath = getTradePath(fromToken, toToken);
-      // Approve transfer of IERC20 to uniswap router
-      approve(address(uniswapRouter), tradeAmount, fromToken, false);
+      // approveToken transfer of IERC20 to uniswap router
+      approveToken(address(uniswapRouter), tradeAmount, fromToken, false);
       amounts = uniswapRouter.swapExactTokensForTokens(tradeAmount, minSwapAmount, tradePath, address(this), deadline);
     }
     // return token from swapping
-    approve(fromWallet, amounts[amounts.length - 1], toToken, true);
+    approveToken(fromWallet, amounts[amounts.length - 1], toToken, true);
     return amounts;
   }
 
@@ -126,8 +126,8 @@ contract DEXAgg {
       minSwapAmount = 1;
       //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
-      // Approve transfer of IERC20 to uniswap router
-      approve(address(uniswapRouter), tradeAmount, fromToken, false);
+      // approveToken transfer of IERC20 to uniswap router
+      approveToken(address(uniswapRouter), tradeAmount, fromToken, false);
       // Swap IERC20 for ETH token
       amounts = uniswapRouter.swapExactTokensForETH(tradeAmount, minSwapAmount, getTradePath(fromToken, uniswapRouter.WETH()), address(this), deadline);
     }
@@ -155,11 +155,11 @@ contract DEXAgg {
       amounts = uniswapRouter.swapExactETHForTokens{value: tradeAmount}(minSwapAmount, tradePath, address(this), deadline);
     }
     // return token from swapping
-    approve(fromWallet, amounts[amounts.length - 1], toToken, true);
+    approveToken(fromWallet, amounts[amounts.length - 1], toToken, true);
     return amounts;
   }
 
-  function addLiquidity(
+  function addLiquidityTokens(
     string memory exchange,
     address payable fromWallet,
     address tokenA,
@@ -171,16 +171,16 @@ contract DEXAgg {
     uint deadline
   ) external payable restricted returns (uint amountA, uint amountB, uint liquidity) {
     // Approve transfer of tokenB to uniswap
-    approve(address(uniswapRouter), amountBDesired, tokenB, false);
+    approveToken(address(uniswapRouter), amountBDesired, tokenB, false);
     //TODO: remove this for mainnet, should be replaced with frontend passed value
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       deadline = block.timestamp + 15000;
       // Approve transfer of tokenA to uniswap when not swapping ETH
-      approve(address(uniswapRouter), amountADesired, tokenA, false);
+      approveToken(address(uniswapRouter), amountADesired, tokenA, false);
       // Add two IERC20 tokens to liquidity pool
       (amountA, amountB, liquidity) = uniswapRouter.addLiquidity(tokenA, tokenB, amountADesired, amountBDesired, amountAMin, amountBMin, address(this), deadline);
       // return liquidity pool tokens from staking
-      approve(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
+      approveToken(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
     }
     return (amountA, amountB, liquidity);
   }
@@ -196,19 +196,19 @@ contract DEXAgg {
     uint deadline
   ) external payable restricted returns (uint amountA, uint amountB, uint liquidity) {
     // Approve transfer of tokenB to uniswap
-    approve(address(uniswapRouter), amountBDesired, tokenB, false);
+    approveToken(address(uniswapRouter), amountBDesired, tokenB, false);
     //TODO: remove this for mainnet, should be replaced with frontend passed value
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
       deadline = block.timestamp + 15000;
       // Add one ETH and one IERC20 token to liquidity pool
       (amountA, amountB, liquidity) = uniswapRouter.addLiquidityETH{value: amountADesired}(tokenB, amountBDesired, amountBMin, amountAMin, address(this), deadline);
       // return liquidity pool tokens from staking
-      approve(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
+      approveToken(fromWallet, liquidity, UNISWAP_LP_ADDRESS, true);
     }
     return (amountA, amountB, liquidity);
   }
 
-  function removeLiquidity(
+  function removeLiquidityTokens(
     string memory exchange,
     address payable fromWallet,
     address tokenA,
@@ -221,14 +221,14 @@ contract DEXAgg {
     // TODO : Support more exchanges
     if (keccak256(abi.encodePacked(exchange)) == keccak256(abi.encodePacked("uniswap"))) {
         // Approve transfer of uniswap LP token back to uniswap
-      approve(address(uniswapRouter), liquidity, UNISWAP_LP_ADDRESS, false);
+      approveToken(address(uniswapRouter), liquidity, UNISWAP_LP_ADDRESS, false);
       //TODO: remove this for mainnet, should be replaced with frontend passed value
       deadline = block.timestamp + 15000;
       (amountA, amountB) = uniswapRouter.removeLiquidity(tokenA, tokenB, liquidity, amountAMin, amountBMin, address(this), deadline);
     }
     // return tokens from withdrawing liquidity
-    approve(fromWallet, amountA, tokenA, true);
-    approve(fromWallet, amountB, tokenB, true);
+    approveToken(fromWallet, amountA, tokenA, true);
+    approveToken(fromWallet, amountB, tokenB, true);
     return (amountA, amountB);
   }
 
@@ -252,7 +252,7 @@ contract DEXAgg {
     }
     // return tokens from withdrawing liquidity
     transferETH(fromWallet, amountA);
-    approve(fromWallet, amountB, tokenB, true);
+    approveToken(fromWallet, amountB, tokenB, true);
     return (amountA, amountB);
   }
 }

@@ -27,7 +27,7 @@ interface IDEXAgg {
     address toToken,
     uint deadline
   ) external payable returns (uint[] memory amounts);
-  function addLiquidity(
+  function addLiquidityTokens(
     string memory exchange,
     address payable fromWallet,
     address tokenA,
@@ -48,7 +48,7 @@ interface IDEXAgg {
     uint amountBMin,
     uint deadline
   ) external payable returns (uint amountA, uint amountB, uint liquidity);
-  function removeLiquidity(
+  function removeLiquidityTokens(
     string memory exchange,
     address payable fromWallet,
     address tokenA,
