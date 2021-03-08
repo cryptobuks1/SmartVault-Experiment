@@ -1,10 +1,5 @@
 pragma solidity ^0.8.0;
 
-//import "interfaces/IUniswapV2Router02.sol";
-//imoprt "interfaces/IERC20.sol"
-import "https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/IUniswapV2Router02.sol";
-import "https://github.com/Uniswap/uniswap-v2-periphery/blob/master/contracts/interfaces/IERC20.sol";
-
 interface ITUniswap {
   function getAddress() external view returns (address contractAddress);
   function updateUniswapRouter(
