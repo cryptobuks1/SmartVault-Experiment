@@ -335,8 +335,8 @@ contract SmartVault {
     uint deadline
   ) external payable noReentrancy restricted {
     // Require wallet has sufficient ETH and tokens to be deposited into specified lp pool
-    require((balances[walletOwner]["ETH"] >= (amountADesired+gasAmount)), "SMARTVAULT_SWAPFUNDS_ERROR");
-    require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    require((balances[walletOwner]["ETH"] >= (amountADesired+gasAmount)), "SMARTVAULT_LIQFUNDS_ERROR");
+    require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_LIQFUNDS_ERROR");
     // Debit gas and send tokens to be deposited to DEXAgg
     debitGas(walletOwner, gasAmount);
     transferETH(dexAgg.getAddress(), amountADesired);
@@ -366,8 +366,8 @@ contract SmartVault {
   ) external payable noReentrancy restricted {
     // Require wallet has sufficient ETH and tokens to be deposited into specified lp pool
     require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
-    require((balances[walletOwner][tokenA] >= (amountADesired)), "SMARTVAULT_SWAPFUNDS_ERROR");
-    require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_SWAPFUNDS_ERROR");
+    require((balances[walletOwner][tokenA] >= (amountADesired)), "SMARTVAULT_LIQFUNDS_ERROR");
+    require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_LIQFUNDS_ERROR");
     // Debit gas and send tokens to be deposited to DEXAgg
     debitGas(walletOwner, gasAmount);
     approveToken(dexAgg.getAddress(), amountADesired, tokenA, true);
