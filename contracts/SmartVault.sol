@@ -52,6 +52,7 @@ contract SmartVault {
     updateTokenAddresses("ETH", address(0x0));
     updateTokenAddresses("DAI", 0x4F96Fe3b7A6Cf9725f59d353F723c1bDb64CA6Aa);
     updateTokenAddresses("MKR", 0xAaF64BFCC32d0F15873a02163e7E500671a4ffcD);
+    // uniswap lp token
     updateTokenAddresses("uniswap", 0xB10cf58E08b94480fCb81d341A63295eBb2062C2);
   }
 
@@ -72,7 +73,7 @@ contract SmartVault {
     address walletOwner,
     string memory token,
     uint amount
-  ) private restricted{
+  ) private restricted {
     balances[walletOwner][token] = balances[walletOwner][token] + amount;
   }
 
@@ -80,10 +81,17 @@ contract SmartVault {
     address walletOwner,
     string memory token,
     uint amount
-  ) private restricted{
+  ) private restricted {
     balances[walletOwner][token] = balances[walletOwner][token] - amount;
   }
 
+  function debitGas(address walletOwner, uint gasAmount) internal noReentrancy restricted  {
+    // Charge user gas for transaction, rebate after if remainder exists
+    balances[walletOwner]["ETH"] = balances[walletOwner]["ETH"]  - gasAmount;
+    gasRebate += gasAmount;
+  }
+
+  // modifier to check if single token transaction is valid for wallet owner
   modifier validSingleToken(
     address walletOwner,
     string memory fromToken,
@@ -104,6 +112,7 @@ contract SmartVault {
     _;
   }
 
+  // modifier to check if double token transaction is valid for wallet owner
   modifier validDoubleToken(
     address payable walletOwner,
     string memory tokenA,
@@ -183,12 +192,6 @@ contract SmartVault {
     }
   }
 
-  function debitGas(address walletOwner, uint gasAmount) internal noReentrancy restricted  {
-    // Charge user gas for transaction, rebate after if remainder exists
-    balances[walletOwner]["ETH"] = balances[walletOwner]["ETH"]  - gasAmount;
-    gasRebate += gasAmount;
-  }
-
   function updateTUniswap(address newTUniswapAddress) public restricted {
     // TODO: INCLUDE TIME DELAY FOR CONTRACT SECURITY
     uniswapInterface = ITUniswap(newTUniswapAddress);
@@ -232,7 +235,7 @@ contract SmartVault {
       // TODO: How to route funds to and from uniswap contract?
       uint[] memory swapAmounts = uniswapInterface.swapTokens(payable(this), tradeAmount, minSwapAmount,
       tokenAddresses[fromToken], tokenAddresses[toToken],  deadline);
-      addBalance(walletOwner, toToken, swapAmounts[1]);
+      balances[walletOwner][toToken] = balances[walletOwner][toToken] + swapAmounts[1];
   }
     // After successful swap we allocate new funds
   }
@@ -249,7 +252,7 @@ contract SmartVault {
     uint amountBMin,
     uint deadline
   ) external payable noReentrancy restricted { //validDoubleToken(walletOwner, tokenA, tokenB, amountADesired, amountBDesired, gasAmount) {
-    // TODO: Why does using validDoubleToken modifier cause stack depth error? -- it's fine, use code below
+    // TODO: Why does using validDoubleToken modifier cause stack depth error?
     if (tokenAddresses[tokenA] == tokenAddresses["ETH"]) {
       require((balances[walletOwner][tokenA] >= (amountADesired+gasAmount)), "SMARTVAULT_TRADEFUNDS_ERROR");
       require((balances[walletOwner][tokenB] >= (amountBDesired)), "SMARTVAULT_TRADEFUNDS_ERROR");
@@ -261,6 +264,9 @@ contract SmartVault {
       require((balances[walletOwner]["ETH"] >= (gasAmount)), "SMARTVAULT_GASFUNDS_ERROR");
     }
     debitGas(walletOwner, gasAmount);
+    subtractBalance(walletOwner, tokenA, amountADesired);
+    subtractBalance(walletOwner, tokenB, amountBDesired);
+
     // Require ETH to be tokenA if passed as argument
     require(tokenAddresses[tokenB] != tokenAddresses["ETH"], "SMARTVAULT_TOKENORDER_ERROR");
     // TODO : Support more exchanges
