@@ -64,10 +64,11 @@ contract LendAgg {
         address walletOwner,
         uint amount,
         address payable CETHContract
-    ) public payable returns (bool) {
+    ) public payable noReentrancy returns (bool) {
         require((balances[walletOwner]["ETH"] >= (amount)), "LENDAGG_SUPPLYFUNDS_ERROR");
         // Create a reference to the corresponding cToken contract
         ICETH cETH = ICETH(CETHContract);
+        uint prevBalance = cETH.balanceOf(address(this));
 
         // Amount of current exchange rate from cToken to underlying
         uint exchangeRateMantissa = cETH.exchangeRateCurrent();
@@ -78,23 +79,28 @@ contract LendAgg {
         emit CompoundLog("Supply Rate: (scaled up by 1e18)", supplyRateMantissa);
 
         cETH.mint{value : amount}(); // TODO: unfort we don't get the trade data, it's broadcast to bchain via events
+
+        uint currBalance = cETH.balanceOf(address(this));
         subtractBalance(walletOwner, "ETH", amount);
+        addBalance(walletOwner, "CETH", currBalance - prevBalance);
         return true;
     }
 
     function supplyTokenToCompound(
         address walletOwner,
         string memory tokenName,
+        string memory cTokenName,
         address tokenContract,
         address cTokenContract,
         uint numTokensToSupply
-    ) public returns (uint) {
+    ) public noReentrancy returns (uint) {
         require((balances[walletOwner][tokenName] >= (numTokensToSupply)), "LENDAGG_SUPPLYFUNDS_ERROR");
         // Create a reference to the underlying asset contract, like DAI.
         IERC20 underlying = IERC20(tokenContract);
 
         // Create a reference to the corresponding cToken contract, like cDAI
         ICERC20 cToken = ICERC20(cTokenContract);
+        uint prevBalance = cToken.balanceOf(address(this));
 
         // Amount of current exchange rate from cToken to underlying
         uint exchangeRateMantissa = cToken.exchangeRateCurrent();
@@ -109,20 +115,27 @@ contract LendAgg {
 
         // Mint cTokens
         uint mintResult = cToken.mint(numTokensToSupply);
+        uint currBalance = cToken.balanceOf(address(this));
         subtractBalance(walletOwner, tokenName, numTokensToSupply);
+        // TODO: is it cheaper to just pass cTokenName in?
+        addBalance(walletOwner, cTokenName, currBalance - prevBalance);
         return mintResult;
     }
 
     function redeemCTokens(
         address walletOwner,
         string memory cTokenName,
+        string memory tokenName,
         uint amount,
+        address tokenContract,
         address cTokenContract
-    ) public returns (bool) {
+    ) public noReentrancy returns (bool) {
         require((balances[walletOwner][cTokenName] >= (amount)), "LENDAGG_REDEEMFUNDS_ERROR");
         // Create a reference to the corresponding cToken contract, like cDAI
         ICERC20 cToken = ICERC20(cTokenContract);
 
+        IERC20 underlying = IERC20(tokenContract);
+        uint prevBalance = underlying.balanceOf(address(this));
         // `amount` is scaled up, see decimal table here:
         // https://compound.finance/docs#protocol-math
 
@@ -140,7 +153,10 @@ contract LendAgg {
         // Error codes are listed here:
         // https://compound.finance/developers/ctokens#ctoken-error-codes
         emit CompoundLog("If this is not 0, there was an error", redeemResult);
+
+        uint currBalance = underlying.balanceOf(address(this));
         subtractBalance(walletOwner, cTokenName, amount);
+        addBalance(walletOwner, tokenName, currBalance - prevBalance);
         return true;
     }
 
@@ -148,10 +164,11 @@ contract LendAgg {
         address walletOwner,
         uint amount,
         address CETHContract
-    ) public returns (bool) {
+    ) public noReentrancy returns (bool) {
         require((balances[walletOwner]["ETH"] >= (amount)), "LENDAGG_REDEEMFUNDS_ERROR");
         // Create a reference to the corresponding cToken contract
         ICETH cETH = ICETH(CETHContract);
+        uint prevBalance = address(this).balance;
 
         // `amount` is scaled up by 1e18 to avoid decimals
 
@@ -169,7 +186,9 @@ contract LendAgg {
         // Error codes are listed here:
         // https://compound.finance/docs/ctokens#ctoken-error-codes
         emit CompoundLog("If this is not 0, there was an error", redeemResult);
+        uint currBalance = address(this).balance;
         subtractBalance(walletOwner, "CETH", amount);
+        addBalance(walletOwner, "ETH", currBalance - prevBalance);
         return true;
     }
 
