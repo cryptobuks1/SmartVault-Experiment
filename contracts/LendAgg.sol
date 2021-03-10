@@ -35,14 +35,6 @@ contract LendAgg {
 
     event CompoundLog(string, uint);
 
-    function deposit(
-        address walletOwner,
-        string memory tokenName,
-        uint amount
-    ) external noReentrancy {
-        balances[walletOwner][tokenName] += amount;
-    }
-
     // functions to edit user balances.
     function addBalance(
         address walletOwner,
@@ -58,6 +50,56 @@ contract LendAgg {
         uint amount
     ) public restricted {
         balances[walletOwner][token] = balances[walletOwner][token] - amount;
+    }
+
+    function approveToken(
+        address transferAddress,
+        uint transferAmount,
+        address tokenAddress,
+        bool transferFunds
+    ) private restricted returns (bool) {
+        // initialize IERC20 token according to provided address
+        IERC20 token = IERC20(tokenAddress);
+        // get ERC20 token balance on contract
+        uint tokenBalance = token.balanceOf(address(this));
+        // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS HERE IN MAINNET (?)
+        require (transferAmount < tokenBalance, "LENDAGG_APPROVEFUNDS_ERROR");
+        // TODO: SHOULD WE HAVE ROBUSTNESS CHECKS HERE IN MAINNET (?)
+        require(token.approve(transferAddress, transferAmount), "LENDAGG_APPROVE_ERROR");
+
+        if (transferFunds){
+            require(token.transfer(transferAddress, transferAmount), "LENDAGG_ERC20TRANSFER_ERROR");
+        }
+        return true;
+    }
+
+    // for withdrawals/transfers of ETH / ERC-20 to addresses
+    function transferToken(
+        address walletOwner,
+        address recipient,
+        string memory tokenName,
+        address tokenAddress,
+        uint debitAmount
+        //uint gasAmount
+    ) public restricted {
+        //require((balances[walletOwner]["ETH"] >= (gasAmount)), "LENDAGG_GASFUNDS_ERROR");
+        require((balances[walletOwner][tokenName] >= (debitAmount)), "LENDAGG_TRANSFERFUNDS_ERROR");
+        require(approveToken(recipient, debitAmount, tokenAddress, true), "LENDAGG_ERC20SENT_ERROR");
+        subtractBalance(walletOwner, tokenName, debitAmount);
+    }
+
+    function transferETH(
+        address walletOwner,
+        address payable recipient,
+        uint debitAmount
+        //uint gasAmount
+    ) public restricted {
+        // if ETH transaction send balanceDebit directly
+        //require((balances[walletOwner]["ETH"] >= (gasAmount)), "LENDAGG_GASFUNDS_ERROR");
+        require((balances[walletOwner]["ETH"] >= (debitAmount)), "LENDAGG_TRANSFERFUNDS_ERROR");
+        (bool sent, ) = recipient.call{value: debitAmount}("");
+        require(sent, "LENDAGG_ETHSENT_ERROR");
+        subtractBalance(walletOwner, "ETH", debitAmount);
     }
 
     function supplyETHToCompound(
