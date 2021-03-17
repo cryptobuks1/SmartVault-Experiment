@@ -153,7 +153,7 @@ contract SmartVault {
     ) public restricted {
         transferToken(walletOwner, contractAddress, tokenName, tokenAddress, debitAmount, gasAmount);
         cvContract = ICVContract(contractAddress);
-        cvContract.deposit(walletOwner, tokenName, debitAmount);
+        cvContract.addBalance(walletOwner, tokenName, debitAmount);
     }
 
     function transferETHToContract(
@@ -164,7 +164,7 @@ contract SmartVault {
     ) public restricted {
         transferETH(walletOwner, contractAddress, debitAmount, gasAmount);
         cvContract = ICVContract(contractAddress);
-        cvContract.deposit(walletOwner, "ETH", debitAmount);
+        cvContract.addBalance(walletOwner, "ETH", debitAmount);
     }
 
 }
